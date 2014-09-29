@@ -1,0 +1,53 @@
+from scrapy.contrib.spiders import CrawlSpider
+from scrapy.http import Request
+from scrapy.selector import Selector
+from scrapy.utils.url import urljoin_rfc
+from PypiPythonCrawler.items import PypipythoncrawlerItem as MyItem
+class PypiSpider(CrawlSpider):
+    """
+    We can use logger to log any messages like errors, debug or even info messages
+    """
+    name="PypiCrawler"
+    allwed_domains=["python.org",]
+    
+    def _urljoin(self, response, url):
+        """        takes url and response => converts into absolute url    """     
+        return urljoin_rfc(response.url, url, response.encoding)            
+
+    
+    def start_requests(self,):
+        #grab the home page.
+        yield Request(url="https://www.python.org/",callback=self.parse_relevant_page,)
+           
+    def parse_relevant_page(self,response):
+        #parse the page and grab the relevant pages,
+        sel=Selector(response)
+        links=sel.xpath('//li[contains(@class,"pypi-meta")]//@href').extract()
+        if len(links)!=1:
+            raise Exception("Seems the layout got changed")
+        else:
+            #one can pass additional parameters into meta, and even we can reset the session by using dont_merge_cookies to True and etc
+            yield Request(url=self._urljoin(response,links[0]),callback=self.parse_pypi_page,meta={'dont_merge_cookies':True,},dont_filter=False,)
+    #now we are in the pypi home page, now try to locate python 3 Packages link
+    def parse_pypi_page(self,response):
+        sel=Selector(response)
+        links=sel.xpath('//a[contains(text(),"Python 3 Packages")]/@href').extract()
+        if len(links)!=1:
+            raise Exception("Seems the layout got changed")
+        else:
+            yield Request(url=self._urljoin(response,links[0]),callback=self.parse_packages,)
+    def parse_packages(self,response):
+        sel=Selector(response)
+        rows=sel.xpath('//table[@class="list"]//tr')
+        for row in rows:
+            link=row.xpath('.//td[position()=1]//@href').extract()
+            name=row.xpath('.//td[position()=1]//text()').extract()
+            desc= row.xpath('.//td[position()=2]//text()').extract()
+            print link, name,desc
+            
+            if link:
+                item=MyItem()
+                item['url']=self._urljoin(response,link[0])
+                item['name']=' '.join(name).strip()
+                item['desc']=' '.join(info).strip()
+                yield item

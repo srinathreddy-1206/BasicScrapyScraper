@@ -1,0 +1,4 @@
+BasicScrapyScraper
+==================
+
+Basic Scrapy Crawler 
